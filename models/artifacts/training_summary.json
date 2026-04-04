@@ -1,0 +1,9 @@
+{
+  "selected_model": "logistic_regression",
+  "selected_threshold": 0.6,
+  "test_roc_auc": 0.8417,
+  "test_pr_auc": 0.6327,
+  "test_precision": 0.5399,
+  "test_recall": 0.7059,
+  "test_f1": 0.6118
+}

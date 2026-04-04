@@ -5,11 +5,7 @@ __pycache__/
 .pytest_cache/
 .coverage
 .venv/
+.mplconfig/
 venv/
 env/
-models/artifacts/
-reports/figures/*.png
-data/processed/*.csv
-data/processed/*.parquet
 *.log
-
