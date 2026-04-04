@@ -133,9 +133,8 @@ def main() -> None:
     ):
         image_path = FIGURE_DIR / image_name
         if image_path.exists():
-            column.image(str(image_path), use_container_width=True)
+            column.image(str(image_path), use_column_width=True)
 
 
 if __name__ == "__main__":
     main()
-
