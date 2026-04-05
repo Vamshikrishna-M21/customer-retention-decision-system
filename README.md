@@ -182,6 +182,38 @@ The dashboard lets you:
 - compare the model threshold with the business-optimal threshold
 - inspect the main prediction drivers
 
+## Dashboard preview
+
+### High-risk customer dashboard
+
+Top half:
+
+![High-risk dashboard top half](reports/screenshots/dashboard_high_risk_1.png)
+
+Bottom half:
+
+![High-risk dashboard bottom half](reports/screenshots/dashboard_high_risk_2.png)
+
+### Medium-risk customer dashboard
+
+Top half:
+
+![Medium-risk dashboard top half](reports/screenshots/dashboard_medium_risk_1.png)
+
+Bottom half:
+
+![Medium-risk dashboard bottom half](reports/screenshots/dashboard_medium_risk_2.png)
+
+### Low-risk customer dashboard
+
+Top half:
+
+![Low-risk dashboard top half](reports/screenshots/dashboard_low_risk_1.png)
+
+Bottom half:
+
+![Low-risk dashboard bottom half](reports/screenshots/dashboard_low_risk_2.png)
+
 ## How to run locally
 
 1. Create a virtual environment and install dependencies:
