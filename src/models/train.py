@@ -23,7 +23,7 @@ from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
-from src.business.rules import build_retention_frame
+from src.business.rules import RetentionAssumptions, build_retention_frame
 from src.data.loader import create_data_splits, load_clean_data
 from src.features.preprocess import (
     CATEGORICAL_FEATURES,
@@ -93,6 +93,21 @@ def get_model_candidates() -> dict[str, Pipeline]:
     }
 
 
+def format_feature_name(feature_name: str) -> str:
+    if feature_name.startswith("num__"):
+        return feature_name.replace("num__", "")
+
+    if feature_name.startswith("cat__"):
+        cleaned = feature_name.replace("cat__", "")
+        parts = cleaned.split("_", 1)
+        if len(parts) == 2:
+            feature, value = parts
+            return f"{feature} = {value}"
+        return cleaned
+
+    return feature_name
+
+
 def ensure_directories() -> None:
     for path in (ARTIFACT_DIR, PROCESSED_DIR, FIGURE_DIR):
         path.mkdir(parents=True, exist_ok=True)
@@ -139,6 +154,36 @@ def select_threshold(model_name: str, trained_model: Pipeline, splits: object) -
     return float(chosen_row["threshold"]), threshold_table
 
 
+def build_threshold_economics(
+    features: pd.DataFrame,
+    y_true: pd.Series,
+    y_score: pd.Series,
+    threshold_table: pd.DataFrame,
+    assumptions: RetentionAssumptions | None = None,
+) -> pd.DataFrame:
+    assumptions = assumptions or RetentionAssumptions()
+    economics_rows: list[dict[str, float | int]] = []
+
+    for threshold in threshold_table["threshold"]:
+        predicted_positive = y_score >= threshold
+        retention_frame = build_retention_frame(features, y_score, assumptions)
+        targeted = retention_frame.loc[predicted_positive].copy()
+
+        economics_rows.append(
+            {
+                "threshold": float(threshold),
+                "targeted_customers": int(predicted_positive.sum()),
+                "target_rate": float(predicted_positive.mean()),
+                "actual_churners_targeted": int(y_true.loc[predicted_positive].sum()),
+                "expected_saved_value_usd": float(targeted["expected_saved_value_usd"].sum()),
+                "total_action_cost_usd": float(targeted["action_cost_usd"].sum()),
+                "net_expected_value_usd": float(targeted["expected_value_usd"].sum()),
+            }
+        )
+
+    return pd.DataFrame(economics_rows)
+
+
 def save_feature_importance(model_name: str, trained_model: Pipeline, splits: object) -> pd.DataFrame:
     if model_name == "logistic_regression":
         feature_names = trained_model.named_steps["preprocessor"].get_feature_names_out()
@@ -167,11 +212,17 @@ def save_feature_importance(model_name: str, trained_model: Pipeline, splits: ob
             }
         ).sort_values("abs_importance", ascending=False)
 
+    importance["display_feature"] = importance["feature"].apply(format_feature_name)
     importance.to_csv(ARTIFACT_DIR / "feature_importance.csv", index=False)
     return importance
 
 
-def create_figures(metrics: pd.DataFrame, threshold_table: pd.DataFrame, importance: pd.DataFrame) -> None:
+def create_figures(
+    metrics: pd.DataFrame,
+    threshold_table: pd.DataFrame,
+    threshold_economics: pd.DataFrame,
+    importance: pd.DataFrame,
+) -> None:
     fig, ax = plt.subplots(figsize=(8, 4.5))
     ax.bar(
         metrics["model_name"],
@@ -202,9 +253,23 @@ def create_figures(metrics: pd.DataFrame, threshold_table: pd.DataFrame, importa
     fig.savefig(FIGURE_DIR / "threshold_tradeoff.png", dpi=200)
     plt.close(fig)
 
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    ax.plot(
+        threshold_economics["threshold"],
+        threshold_economics["net_expected_value_usd"],
+        marker="o",
+        color="#e15759",
+    )
+    ax.set_title("Net expected value by threshold")
+    ax.set_xlabel("Threshold")
+    ax.set_ylabel("Net expected value (USD)")
+    fig.tight_layout()
+    fig.savefig(FIGURE_DIR / "threshold_economics.png", dpi=200)
+    plt.close(fig)
+
     top_features = importance.head(12).sort_values("abs_importance")
     fig, ax = plt.subplots(figsize=(8, 5.5))
-    ax.barh(top_features["feature"], top_features["abs_importance"], color="#59a14f")
+    ax.barh(top_features["display_feature"], top_features["abs_importance"], color="#59a14f")
     ax.set_title("Top feature signals")
     ax.set_xlabel("Absolute importance")
     ax.set_ylabel("")
@@ -219,12 +284,25 @@ def train_and_save_artifacts() -> dict[str, float | str]:
     metrics, trained_models, splits = fit_and_score_models()
     selected_model_name = metrics.iloc[0]["model_name"]
     selected_model = trained_models[selected_model_name]
+    assumptions = RetentionAssumptions()
 
     selected_threshold, threshold_table = select_threshold(
         selected_model_name,
         selected_model,
         splits,
     )
+    valid_scores = pd.Series(selected_model.predict_proba(splits.X_valid)[:, 1])
+    threshold_economics = build_threshold_economics(
+        splits.X_valid,
+        splits.y_valid,
+        valid_scores,
+        threshold_table,
+        assumptions,
+    )
+    best_business_row = threshold_economics.sort_values(
+        by=["net_expected_value_usd", "actual_churners_targeted"],
+        ascending=False,
+    ).iloc[0]
 
     combined_features = pd.concat([splits.X_train, splits.X_valid], axis=0).reset_index(drop=True)
     combined_target = pd.concat([splits.y_train, splits.y_valid], axis=0).reset_index(drop=True)
@@ -240,14 +318,15 @@ def train_and_save_artifacts() -> dict[str, float | str]:
     )
     test_metrics = pd.DataFrame([test_result.as_dict()])
 
-    retention_output = build_retention_frame(splits.X_test, pd.Series(test_scores))
+    retention_output = build_retention_frame(splits.X_test, pd.Series(test_scores), assumptions)
     retention_output.insert(0, "actual_churn", splits.y_test)
 
     importance = save_feature_importance(selected_model_name, final_model, splits)
-    create_figures(metrics, threshold_table, importance)
+    create_figures(metrics, threshold_table, threshold_economics, importance)
 
     metrics.to_csv(ARTIFACT_DIR / "validation_model_metrics.csv", index=False)
     threshold_table.to_csv(ARTIFACT_DIR / "threshold_analysis.csv", index=False)
+    threshold_economics.to_csv(ARTIFACT_DIR / "threshold_economics.csv", index=False)
     test_metrics.to_csv(ARTIFACT_DIR / "test_metrics.csv", index=False)
     retention_output.to_csv(PROCESSED_DIR / "retention_predictions.csv", index=False)
 
@@ -259,11 +338,13 @@ def train_and_save_artifacts() -> dict[str, float | str]:
     summary = {
         "selected_model": selected_model_name,
         "selected_threshold": selected_threshold,
+        "best_business_threshold": round(float(best_business_row["threshold"]), 2),
         "test_roc_auc": round(float(test_result.roc_auc), 4),
         "test_pr_auc": round(float(test_result.pr_auc), 4),
         "test_precision": round(float(test_result.precision), 4),
         "test_recall": round(float(test_result.recall), 4),
         "test_f1": round(float(test_result.f1), 4),
+        "best_threshold_net_value_usd": round(float(best_business_row["net_expected_value_usd"]), 2),
     }
 
     with open(ARTIFACT_DIR / "training_summary.json", "w", encoding="utf-8") as file:
