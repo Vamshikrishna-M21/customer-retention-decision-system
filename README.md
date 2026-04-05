@@ -17,6 +17,26 @@ The repository combines:
 - retention action recommendations with customer-level value proxy
 - a Streamlit dashboard for interactive demos
 
+## Tech stack
+
+- Python
+- pandas and NumPy
+- scikit-learn pipelines and classifiers
+- matplotlib and seaborn
+- Streamlit
+- pytest
+
+## Why this project is stronger than a basic churn model
+
+This project is designed as a decision system, not just a classifier.
+
+Instead of stopping at "who might churn," it also answers:
+
+- which probability threshold creates the best model classification trade-off
+- which threshold creates the best expected business value
+- what action should be recommended for each customer segment
+- how customer value differences should affect retention targeting
+
 ## Dataset
 
 Source: Kaggle Telco Customer Churn dataset
@@ -194,6 +214,4 @@ The dashboard lets you:
 
 - add calibration curves and probability calibration comparison
 - test threshold policies under multiple business cost assumptions
-- version model artifacts and metrics more formally
-- add experiment tracking for hyperparameter tuning
-- package the inference pipeline for deployment
+- replace the value proxy with a richer customer value estimate if more customer economics data is available
