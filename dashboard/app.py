@@ -102,7 +102,7 @@ def main() -> None:
     metric_col1.metric("Selected model", summary["selected_model"].replace("_", " ").title())
     metric_col2.metric("ROC-AUC", f"{summary['test_roc_auc']:.3f}")
     metric_col3.metric("PR-AUC", f"{summary['test_pr_auc']:.3f}")
-    metric_col4.metric("Recall", f"{summary['test_recall']:.3f}")
+    metric_col4.metric("Best threshold value", f"${summary['best_threshold_net_value_usd']:.0f}")
 
     st.subheader("Score a customer profile")
     customer_frame = build_customer_form(data)
@@ -115,22 +115,28 @@ def main() -> None:
         pred_col2.metric("Risk band", result["risk_band"].title())
         pred_col3.metric("Expected value", f"${result['expected_value_usd']:.2f}")
 
+        detail_col1, detail_col2, detail_col3 = st.columns(3)
+        detail_col1.metric("Estimated customer value", f"${result['estimated_customer_value']:.2f}")
+        detail_col2.metric("Decision threshold used in training", f"{result['threshold']:.2f}")
+        detail_col3.metric("Best business threshold", f"{summary['best_business_threshold']:.2f}")
+
         st.markdown(f"**Recommended action:** {result['recommended_action']}")
-        st.markdown(f"**Decision threshold used in training:** {result['threshold']:.2f}")
+        st.markdown(f"**Why this action:** {result['action_reason']}")
 
         st.subheader("Top prediction drivers")
         st.dataframe(result["top_drivers"], hide_index=True, use_container_width=True)
 
     st.subheader("Project visuals")
-    image_col1, image_col2, image_col3 = st.columns(3)
-    for column, image_name in zip(
-        [image_col1, image_col2, image_col3],
-        [
-            "model_comparison_pr_auc.png",
-            "threshold_tradeoff.png",
-            "top_feature_importance.png",
-        ],
-    ):
+    image_names = [
+        "model_comparison_pr_auc.png",
+        "threshold_tradeoff.png",
+        "threshold_economics.png",
+        "top_feature_importance.png",
+    ]
+    first_row = st.columns(2)
+    second_row = st.columns(2)
+
+    for column, image_name in zip(first_row + second_row, image_names):
         image_path = FIGURE_DIR / image_name
         if image_path.exists():
             column.image(str(image_path), use_column_width=True)

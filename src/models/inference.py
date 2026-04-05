@@ -5,7 +5,14 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
-from src.business.rules import assign_risk_band, estimate_expected_value, recommend_action
+from src.business.rules import (
+    RetentionAssumptions,
+    assign_risk_band,
+    estimate_customer_value,
+    estimate_expected_value,
+    explain_action_rule,
+    recommend_action,
+)
 
 
 MODEL_BUNDLE_PATH = Path("models/artifacts/model_bundle.joblib")
@@ -20,22 +27,46 @@ def load_global_importance(path: Path | str = FEATURE_IMPORTANCE_PATH) -> pd.Dat
     return pd.read_csv(path)
 
 
+def format_feature_name(feature_name: str) -> str:
+    if feature_name.startswith("num__"):
+        return feature_name.replace("num__", "")
+
+    if feature_name.startswith("cat__"):
+        cleaned = feature_name.replace("cat__", "")
+        parts = cleaned.split("_", 1)
+        if len(parts) == 2:
+            feature, value = parts
+            return f"{feature} = {value}"
+        return cleaned
+
+    return feature_name
+
+
 def score_customer(input_frame: pd.DataFrame, bundle: dict | None = None) -> dict:
     bundle = bundle or load_model_bundle()
     pipeline = bundle["model"]
     threshold = bundle["threshold"]
     model_name = bundle["model_name"]
+    assumptions = RetentionAssumptions()
 
     churn_probability = float(pipeline.predict_proba(input_frame)[0, 1])
     risk_band = assign_risk_band(churn_probability)
-    expected_value = estimate_expected_value(churn_probability, risk_band)
+    customer_value = estimate_customer_value(input_frame.iloc[0], assumptions)
+    expected_value = estimate_expected_value(
+        churn_probability,
+        risk_band,
+        customer_value,
+        assumptions,
+    )
 
     response = {
         "model_name": model_name,
         "threshold": threshold,
         "churn_probability": churn_probability,
         "risk_band": risk_band,
+        "estimated_customer_value": customer_value,
         "recommended_action": recommend_action(risk_band),
+        "action_reason": explain_action_rule(risk_band),
         "expected_value_usd": expected_value,
     }
 
@@ -51,11 +82,18 @@ def score_customer(input_frame: pd.DataFrame, bundle: dict | None = None) -> dic
             }
         )
         contributions["abs_contribution"] = contributions["contribution"].abs()
-        response["top_drivers"] = contributions.sort_values(
-            "abs_contribution", ascending=False
-        ).head(6)[["feature", "contribution"]]
+        top_drivers = contributions.sort_values("abs_contribution", ascending=False).head(6).copy()
+        top_drivers["feature"] = top_drivers["feature"].apply(format_feature_name)
+        top_drivers["effect"] = top_drivers["contribution"].apply(
+            lambda value: "Raises churn risk" if value > 0 else "Lowers churn risk"
+        )
+        response["top_drivers"] = top_drivers[["feature", "effect", "contribution"]]
     else:
-        response["top_drivers"] = load_global_importance().head(6)[["feature", "importance"]]
+        top_drivers = load_global_importance().head(6).copy()
+        top_drivers["feature"] = top_drivers["feature"].apply(format_feature_name)
+        top_drivers["effect"] = top_drivers["importance"].apply(
+            lambda value: "Raises churn risk" if value > 0 else "Lowers churn risk"
+        )
+        response["top_drivers"] = top_drivers[["feature", "effect", "importance"]]
 
     return response
-

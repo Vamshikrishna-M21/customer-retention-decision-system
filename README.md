@@ -13,8 +13,8 @@ The repository combines:
 - exploratory analysis of churn patterns
 - reproducible preprocessing and training pipelines
 - model comparison across baseline and tree-based approaches
-- threshold selection based on retention use case
-- retention action recommendations with scenario-based expected value
+- threshold selection based on both model quality and targeting economics
+- retention action recommendations with customer-level value proxy
 - a Streamlit dashboard for interactive demos
 
 ## Dataset
@@ -69,13 +69,15 @@ The workflow uses:
 - train / validation / test split with stratification
 - preprocessing pipelines for numeric and categorical features
 - PR-AUC, ROC-AUC, precision, recall, F1, and Brier score
-- threshold tuning based on recall-sensitive retention targeting
+- threshold analysis for both classification quality and net expected value
 
 ## Final results
 
 Selected model: `logistic_regression`
 
 Selected threshold: `0.60`
+
+Best business targeting threshold on validation: `0.30`
 
 Test split metrics:
 
@@ -93,6 +95,12 @@ Validation comparison:
 | Random Forest | 0.8375 | 0.6408 | 0.7433 |
 | HistGradientBoosting | 0.8295 | 0.6355 | 0.5027 |
 
+Threshold economics summary:
+
+- highest validation net expected value: `$30,377.87`
+- best business targeting threshold: `0.30`
+- final classification threshold kept at `0.60` to preserve a stronger precision/recall balance for predicted churn labels
+
 ## Business insights
 
 The data audit and feature importance outputs highlight a few strong churn patterns:
@@ -108,7 +116,18 @@ Retention actions are mapped from predicted risk:
 - medium risk: personalized retention email
 - low risk: monitor without extra spend
 
-Expected value estimates are included as scenario-based assumptions, not real company savings claims.
+To make the action layer more realistic, the project uses a customer-level value proxy instead of assuming every customer is worth the same amount:
+
+`estimated_customer_value = MonthlyCharges x expected_remaining_months_by_contract x gross_margin_rate`
+
+Default assumptions used in this version:
+
+- month-to-month customers: `8` future months
+- one-year customers: `14` future months
+- two-year customers: `24` future months
+- gross margin rate: `0.80`
+
+This is still a proxy, not true CLV. The dataset does not contain real customer lifetime value or campaign-outcome data.
 
 ## Visual outputs
 
@@ -119,6 +138,10 @@ Expected value estimates are included as scenario-based assumptions, not real co
 ### Threshold trade-off
 
 ![Threshold trade-off](reports/figures/threshold_tradeoff.png)
+
+### Threshold economics
+
+![Threshold economics](reports/figures/threshold_economics.png)
 
 ### Top feature signals
 
@@ -134,7 +157,9 @@ The dashboard lets you:
 - enter a customer profile
 - score churn probability
 - view the risk band
+- view the estimated customer value proxy
 - see the recommended retention action
+- compare the model threshold with the business-optimal threshold
 - inspect the main prediction drivers
 
 ## How to run locally
@@ -168,7 +193,7 @@ The dashboard lets you:
 ## What I would improve next
 
 - add calibration curves and probability calibration comparison
-- test threshold policies under different business cost assumptions
+- test threshold policies under multiple business cost assumptions
 - version model artifacts and metrics more formally
 - add experiment tracking for hyperparameter tuning
 - package the inference pipeline for deployment
