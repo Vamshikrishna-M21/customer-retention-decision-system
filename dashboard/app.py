@@ -87,8 +87,8 @@ def build_customer_form(data: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
-    st.set_page_config(page_title="Customer Retention ML System", layout="wide")
-    st.title("Customer Retention ML System")
+    st.set_page_config(page_title="Customer Retention Decision System", layout="wide")
+    st.title("Customer Retention Decision System")
     st.caption("Predict churn risk and turn it into a retention action recommendation.")
 
     if not MODEL_BUNDLE_PATH.exists():

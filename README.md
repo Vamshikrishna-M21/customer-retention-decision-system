@@ -1,4 +1,4 @@
-# customer-retention-ml-system
+# customer-retention-decision-system
 
 End-to-end machine learning project for predicting customer churn and turning model scores into retention actions.
 
@@ -36,7 +36,7 @@ Notable cleaning details:
 ## Repository structure
 
 ```text
-customer-retention-ml-system/
+customer-retention-decision-system/
 ├── dashboard/
 ├── data/
 │   ├── raw/
